@@ -1,0 +1,6 @@
+{
+  "name": "AI README Generator",
+  "description": "Generate a README.md file for your GitHub repository using AI. Simply provide the repository link and get a well-structured README in seconds.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
