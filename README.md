@@ -21,8 +21,8 @@ You need to have [Node.js](https://nodejs.org/) (version 18 or newer recommended
 
 1.  **Clone the repository (or download the files):**
     ```sh
-    git clone <repository-url>
-    cd <repository-directory>
+    git clone https://github.com/Adhith-M/ai-readme-generator.git
+    cd ai-readme-generator
     ```
 
 2.  **Install NPM packages:**
