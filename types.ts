@@ -16,8 +16,22 @@ export interface GitHubFile {
   download_url: string | null;
 }
 
+export interface FileContent {
+    name: string;
+    content: string;
+    type: string;
+    size: number;
+}
+
 export interface RepoData {
     repoDetails: GitHubRepo;
     rootFiles: GitHubFile[];
     packageJsonContent?: string | null;
+    fileContents: FileContent[];
+    analysisMetadata: {
+        totalFiles: number;
+        languages: string[];
+        frameworks: string[];
+        dependencies: string[];
+    };
 }
