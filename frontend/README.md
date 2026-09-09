@@ -26,22 +26,16 @@ You need to have [Node.js](https://nodejs.org/) (version 18 or newer recommended
     cd ai-readme-generator
     ```
 
-2.  **Install backend packages:**
+2.  **Install NPM packages:**
 
     ```sh
-    cd backend
     npm install
     ```
 
-3.  **Install frontend packages:**
+3.  **Set up your environment variables:**
+    Configure the backend with a Groq API key.
 
-    ```sh
-    cd ../frontend
-    npm install
-    ```
-
-4.  **Set up your environment variables:**
-    Copy `frontend/.env.example` to `frontend/.env.local` and add your server-side credentials.
+    Copy `.env.example` to `.env.local` and add your server-side credentials:
 
     ```env
     GROQ_API_KEY="YOUR_GROQ_API_KEY_HERE"
@@ -53,17 +47,15 @@ You need to have [Node.js](https://nodejs.org/) (version 18 or newer recommended
 
 ### Running the Application
 
-Once installation is complete and your API key is set, start the frontend from the `frontend` directory:
+Once the installation is complete and your API key is set, you can run the development server:
 
 ```sh
-cd frontend
 npm run dev
 ```
 
-In a second terminal, start the backend from the `frontend` directory:
+In a second terminal, start the backend:
 
 ```sh
-cd frontend
 npm run server
 ```
 

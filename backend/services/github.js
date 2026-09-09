@@ -1,6 +1,4 @@
 
-import type { GitHubRepo, GitHubFile, RepoData, FileContent } from '../types';
-
 const GITHUB_API_BASE = 'https://api.github.com';
 
 // File types we want to analyze for better README generation
@@ -14,9 +12,9 @@ const IMPORTANT_FILE_TYPES = [
 const MAX_FILE_SIZE = 100 * 1024;
 
 // Maximum number of files to analyze to avoid API limits
-const MAX_FILES_TO_ANALYZE = 20;
+const MAX_FILES_TO_ANALYZE = 150;
 
-const parseRepoUrl = (url: string): { owner: string; repo: string } | null => {
+const parseRepoUrl = (url) => {
     try {
         const urlObj = new URL(url);
         if (urlObj.hostname !== 'github.com') {
@@ -34,15 +32,25 @@ const parseRepoUrl = (url: string): { owner: string; repo: string } | null => {
     }
 };
 
-const shouldAnalyzeFile = (file: GitHubFile): boolean => {
-    if (file.type !== 'file') return false;
+const shouldAnalyzeFile = (file) => {
+    if (file.type !== 'blob' && file.type !== 'file') return false;
     
-    const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+    // Ignore node_modules, build, dist, vendor, etc.
+    if (file.path.includes('node_modules/') || 
+        file.path.includes('.git/') || 
+        file.path.includes('dist/') || 
+        file.path.includes('build/') ||
+        file.path.includes('.next/') ||
+        file.path.includes('vendor/')) {
+        return false;
+    }
+    
+    const extension = '.' + (file.name || file.path.split('/').pop() || '').split('.').pop()?.toLowerCase();
     return IMPORTANT_FILE_TYPES.includes(extension) || 
-           ['README.md', 'package.json', 'requirements.txt', 'Dockerfile', 'docker-compose.yml'].includes(file.name);
+           ['README.md', 'package.json', 'requirements.txt', 'Dockerfile', 'docker-compose.yml'].includes(file.name || file.path.split('/').pop() || '');
 };
 
-const fetchFileContent = async (file: GitHubFile, headers: Record<string, string>): Promise<FileContent | null> => {
+const fetchFileContent = async (file, headers) => {
     if (!file.download_url || !shouldAnalyzeFile(file)) return null;
     
     try {
@@ -54,22 +62,23 @@ const fetchFileContent = async (file: GitHubFile, headers: Record<string, string
         // Skip if file is too large
         if (content.length > MAX_FILE_SIZE) return null;
         
+        const fileName = file.name || file.path.split('/').pop() || 'unknown';
         return {
-            name: file.name,
+            name: fileName,
             content: content,
-            type: file.name.split('.').pop()?.toLowerCase() || 'unknown',
+            type: fileName.split('.').pop()?.toLowerCase() || 'unknown',
             size: content.length
         };
     } catch (error) {
-        console.error(`Error fetching content for ${file.name}:`, error);
+        console.error(`Error fetching content for ${file.path}:`, error);
         return null;
     }
 };
 
-const analyzeRepository = (fileContents: FileContent[], packageJsonContent: string | null) => {
-    const languages = new Set<string>();
-    const frameworks = new Set<string>();
-    const dependencies = new Set<string>();
+const analyzeRepository = (fileContents, packageJsonContent) => {
+    const languages = new Set();
+    const frameworks = new Set();
+    const dependencies = new Set();
     
     // Analyze file extensions for languages
     fileContents.forEach(file => {
@@ -164,7 +173,7 @@ const analyzeRepository = (fileContents: FileContent[], packageJsonContent: stri
         if (content.includes('flask') || content.includes('from flask')) {
             frameworks.add('Flask');
         }
-        if (content.includes('spring') || content.includes('@SpringBootApplication')) {
+        if (content.includes('spring') || content.includes('@springbootapplication')) {
             frameworks.add('Spring Boot');
         }
     });
@@ -177,7 +186,7 @@ const analyzeRepository = (fileContents: FileContent[], packageJsonContent: stri
     };
 };
 
-export const fetchRepoData = async (repoUrl: string): Promise<RepoData> => {
+export const fetchRepoData = async (repoUrl, githubToken) => {
     const repoParts = parseRepoUrl(repoUrl);
     if (!repoParts) {
         throw new Error('Invalid GitHub repository URL. Please use a format like https://github.com/owner/repo.');
@@ -185,38 +194,46 @@ export const fetchRepoData = async (repoUrl: string): Promise<RepoData> => {
 
     const { owner, repo } = repoParts;
 
-    // Support GitHub token authentication via environment variable (VITE_GITHUB_TOKEN)
-    const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
-    const headers: Record<string, string> = {};
+    const headers = {};
     if (githubToken) {
         headers['Authorization'] = `token ${githubToken}`;
     }
 
     try {
-        const [repoDetailsRes, rootFilesRes] = await Promise.all([
-            fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, { headers }),
-            fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/contents`, { headers })
-        ]);
-
-        if (repoDetailsRes.status === 404 || rootFilesRes.status === 404) {
+        const repoDetailsRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, { headers });
+        if (repoDetailsRes.status === 404) {
             throw new Error(`Repository not found. Please check the URL.`);
         }
-
         if (!repoDetailsRes.ok) {
             const errText = await repoDetailsRes.text();
             throw new Error(`Failed to fetch repository details: ${repoDetailsRes.statusText}. ${errText}`);
         }
-        if (!rootFilesRes.ok) {
-            const errText = await rootFilesRes.text();
-            throw new Error(`Failed to fetch repository contents: ${rootFilesRes.statusText}. ${errText}`);
+
+        const repoDetails = await repoDetailsRes.json();
+        const defaultBranch = repoDetails.default_branch || 'main';
+
+        const treeRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`, { headers });
+        if (!treeRes.ok) {
+            const errText = await treeRes.text();
+            throw new Error(`Failed to fetch repository tree: ${treeRes.statusText}. ${errText}`);
         }
 
-        const repoDetails: GitHubRepo = await repoDetailsRes.json();
-        const rootFiles: GitHubFile[] = await rootFilesRes.json();
+        const treeData = await treeRes.json();
+        const allFiles = treeData.tree || [];
 
-        // Find and fetch package.json content
-        const packageJsonFile = rootFiles.find(file => file.name === 'package.json' && file.type === 'file');
-        let packageJsonContent: string | null = null;
+        // Map to GitHubFile format
+        const rootFiles = allFiles.map(file => {
+            return {
+                name: file.path.split('/').pop() || file.path,
+                path: file.path,
+                type: file.type === 'blob' ? 'file' : 'dir',
+                download_url: file.type === 'blob' ? `https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/${file.path}` : null
+            };
+        });
+
+        // Find package.json in root (path exactly 'package.json')
+        const packageJsonFile = rootFiles.find(file => file.path === 'package.json');
+        let packageJsonContent = null;
 
         if (packageJsonFile && packageJsonFile.download_url) {
             const packageJsonRes = await fetch(packageJsonFile.download_url);
@@ -225,28 +242,33 @@ export const fetchRepoData = async (repoUrl: string): Promise<RepoData> => {
             }
         }
 
-        // Analyze important files (limit to avoid API rate limits)
-        const filesToAnalyze = rootFiles
+        // Prioritize important source files
+        const sortedFiles = [...rootFiles].sort((a, b) => {
+            const getPriority = (f) => {
+                if (f.path === 'package.json') return 0;
+                if (f.path === 'README.md') return 1;
+                if (f.path.startsWith('src/')) return 2;
+                if (f.path.startsWith('lib/')) return 3;
+                if (f.path.startsWith('app/')) return 4;
+                return 5;
+            };
+            return getPriority(a) - getPriority(b);
+        });
+
+        const filesToAnalyze = sortedFiles
             .filter(shouldAnalyzeFile)
             .slice(0, MAX_FILES_TO_ANALYZE);
 
         console.log(`Analyzing ${filesToAnalyze.length} files for better README generation...`);
 
-        // Fetch file contents in parallel (but limit concurrent requests)
+        // Fetch file contents in parallel
         const fileContentPromises = filesToAnalyze.map(file => fetchFileContent(file, headers));
         const fileContentResults = await Promise.all(fileContentPromises);
         
         // Filter out null results
-        const fileContents: FileContent[] = fileContentResults.filter((content): content is FileContent => content !== null);
+        const fileContents = fileContentResults.filter(content => content !== null);
 
-        // Analyze repository for metadata
         const analysisMetadata = analyzeRepository(fileContents, packageJsonContent);
-
-        console.log(`Repository analysis complete:`, {
-            filesAnalyzed: fileContents.length,
-            languagesFound: analysisMetadata.languages,
-            frameworksFound: analysisMetadata.frameworks
-        });
 
         return {
             repoDetails,
@@ -255,10 +277,9 @@ export const fetchRepoData = async (repoUrl: string): Promise<RepoData> => {
             fileContents,
             analysisMetadata
         };
-    } catch (error: any) {
-        // Show a more helpful error message
+    } catch (error) {
         if (error?.message?.includes('rate limit')) {
-            throw new Error('GitHub API rate limit exceeded. Please add a personal access token to your .env.local as VITE_GITHUB_TOKEN.');
+            throw new Error('GitHub API rate limit exceeded. Add GITHUB_TOKEN to your backend environment.');
         }
         throw new Error(`Failed to fetch repository data: ${error?.message || error}`);
     }

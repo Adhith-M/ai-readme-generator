@@ -1,11 +1,7 @@
 
 import React from 'react';
 
-type IconProps = {
-  className?: string;
-};
-
-export const GitHubIcon: React.FC<IconProps> = ({ className }) => (
+export const GitHubIcon = ({ className }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 16 16"
@@ -17,7 +13,7 @@ export const GitHubIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-export const SparklesIcon: React.FC<IconProps> = ({ className }) => (
+export const SparklesIcon = ({ className }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     fill="none"
@@ -35,7 +31,7 @@ export const SparklesIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-export const CopyIcon: React.FC<IconProps> = ({ className }) => (
+export const CopyIcon = ({ className }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     fill="none"
@@ -53,7 +49,7 @@ export const CopyIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-export const DownloadIcon: React.FC<IconProps> = ({ className }) => (
+export const DownloadIcon = ({ className }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     fill="none"
@@ -71,7 +67,7 @@ export const DownloadIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-export const ErrorIcon: React.FC<IconProps> = ({ className }) => (
+export const ErrorIcon = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
